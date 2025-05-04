@@ -1,8 +1,5 @@
-import { ReactElement } from "react";
-import "./App.css";
+import HabitTracker from "./HabitTracker";
 
-function App(): ReactElement {
-  return <></>;
+export default function App() {
+  return <HabitTracker />;
 }
-
-export default App;
