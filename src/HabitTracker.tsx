@@ -1,58 +1,90 @@
-import { JSX, useState } from "react";
+// HabitTracker.tsx
+import { JSX, useEffect, useState } from "react";
 import "./HabitTracker.css";
+import {
+  getHabits,
+  addHabitToDB,
+  removeHabitFromDB,
+  updateHabitHistory,
+  pastWeekDates,
+} from "./habit-service";
+const { REACT_AWS_ACCESS_KEY } = process.env;
 
 type Habit = {
-  readonly id: number;
-  readonly name: string;
-  readonly history: Record<string, boolean>;
+  id: string;
+  name: string;
+  history: Record<string, boolean>;
 };
 
-const getPastWeekDates = (): string[] => {
-  const dates: string[] = [];
-  const today = new Date();
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(today.getDate() - i);
-    dates.push(date.toISOString().split("T")[0]);
-  }
-  return dates;
-};
+console.log(REACT_AWS_ACCESS_KEY);
+
+// const getPastWeekDates = (): string[] => {
+//   const dates: string[] = [];
+//   const today = new Date();
+//   for (let i = 6; i >= 0; i--) {
+//     const date = new Date();
+//     date.setDate(today.getDate() - i);
+//     dates.push(date.toISOString().split("T")[0]);
+//   }
+//   return dates;
+// };
 
 export default function HabitTracker(): JSX.Element {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [newHabit, setNewHabit] = useState<string>("");
-  const dates = getPastWeekDates();
+  const dates = pastWeekDates;
 
-  const addHabit = (): void => {
+  useEffect(() => {
+    const fetchHabits = async () => {
+      const allHabits = await getHabits();
+      setHabits(allHabits);
+    };
+    fetchHabits();
+  }, []);
+
+  const addHabit = async (): Promise<void> => {
     if (newHabit.trim() === "") return;
+    const allDates = { [new Date().toISOString().split("T")[0]]: false };
     const habit: Habit = {
-      id: Date.now(),
+      id: Date.now().toString(),
       name: newHabit,
+      history: allDates,
+    };
+    await addHabitToDB(habit);
+    const newViewHabit = {
+      ...habit,
       history: dates.reduce((acc, date) => ({ ...acc, [date]: false }), {}),
     };
-    setHabits([...habits, habit]);
+    setHabits([...habits, newViewHabit]);
     setNewHabit("");
   };
 
-  const removeHabit = (id: number): void => {
+  const removeHabit = async (id: string): Promise<void> => {
+    await removeHabitFromDB(id);
     setHabits(habits.filter((habit) => habit.id !== id));
   };
 
-  const toggleHabitDay = (habitId: number, date: string): void => {
-    setHabits(
-      habits.map((habit) => {
-        if (habit.id === habitId) {
-          return {
-            ...habit,
-            history: {
-              ...habit.history,
-              [date]: !habit.history[date],
-            },
-          };
-        }
-        return habit;
-      }),
-    );
+  const toggleHabitDay = async (
+    habitId: string,
+    date: string,
+  ): Promise<void> => {
+    let habitStatus = false;
+    const updatedHabits = habits.map((habit) => {
+      if (habit.id === habitId) {
+        habitStatus = !habit.history[date];
+        return {
+          ...habit,
+          history: {
+            ...habit.history,
+            [date]: !habit.history[date],
+          },
+        };
+      }
+      return habit;
+    });
+
+    await updateHabitHistory(habitId, date, habitStatus);
+    setHabits(updatedHabits);
   };
 
   return (
